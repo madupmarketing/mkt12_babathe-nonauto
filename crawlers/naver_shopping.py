@@ -160,13 +160,17 @@ def _set_date_yesterday(driver, target_date: str):
         pass
 
     # 날짜 범위 버튼 중 "어제" 버튼 시도 — JS로 태그 우선순위 탐색
+    # innerText는 headless Chrome에서 빈 문자열 반환 → textContent 사용
     clicked = driver.execute_script("""
         var tags = ['button', 'a', 'span', 'li', 'div'];
         for (var ti = 0; ti < tags.length; ti++) {
             var els = document.querySelectorAll(tags[ti]);
             for (var i = 0; i < els.length; i++) {
-                var t = (els[i].innerText || '').trim();
-                if (t === '어제') { els[i].click(); return true; }
+                var t = (els[i].textContent || '').trim();
+                var st = window.getComputedStyle(els[i]);
+                if (t === '어제' && st.display !== 'none' && st.visibility !== 'hidden') {
+                    els[i].click(); return true;
+                }
             }
         }
         return false;
@@ -183,8 +187,11 @@ def _set_date_yesterday(driver, target_date: str):
         for (var ti = 0; ti < tags.length; ti++) {
             var els = document.querySelectorAll(tags[ti]);
             for (var i = 0; i < els.length; i++) {
-                var t = (els[i].innerText || '').trim();
-                if (t === '조회') { els[i].click(); return true; }
+                var t = (els[i].textContent || '').trim();
+                var st = window.getComputedStyle(els[i]);
+                if (t === '조회' && st.display !== 'none' && st.visibility !== 'hidden') {
+                    els[i].click(); return true;
+                }
             }
         }
         return false;
@@ -221,8 +228,8 @@ def _extract_summary(driver, label: str) -> dict | None:
     cells = driver.execute_script("""
         var all = document.querySelectorAll('*');
         for (var i = 0; i < all.length; i++) {
-            var t = (all[i].innerText || '').trim();
-            if (t.indexOf('합계') === 0 && all[i].children.length === 0) {
+            var t = (all[i].textContent || '').trim();
+            if (t === '합계' && all[i].children.length === 0) {
                 var row = all[i].parentElement;
                 while (row && row.children.length < 4) {
                     row = row.parentElement;
@@ -230,7 +237,7 @@ def _extract_summary(driver, label: str) -> dict | None:
                 if (!row) return null;
                 var result = [];
                 for (var j = 0; j < row.children.length; j++) {
-                    result.push((row.children[j].innerText || '').trim());
+                    result.push((row.children[j].textContent || '').replace(/\\s+/g, ' ').trim());
                 }
                 return result;
             }

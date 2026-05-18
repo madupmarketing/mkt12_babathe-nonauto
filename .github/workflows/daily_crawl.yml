@@ -52,8 +52,8 @@ jobs:
           DATE_FROM:              ${{ github.event.inputs.date_from }}
           DATE_TO:                ${{ github.event.inputs.date_to }}
           ALLOW_PARTIAL_UPLOAD:   "1"
-          # 네이버쇼핑만 비활성화 (에디AI 수정 완료)
-          SKIP_CRAWLERS:          "naver_shopping"
+          # 전체 크롤러 활성화
+          SKIP_CRAWLERS:          ""
           # 버즈빌
           BUZZVIL_EMAIL:          ${{ secrets.BUZZVIL_EMAIL }}
           BUZZVIL_PASSWORD:       ${{ secrets.BUZZVIL_PASSWORD }}
