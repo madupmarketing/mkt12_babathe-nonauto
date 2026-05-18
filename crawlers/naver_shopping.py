@@ -159,38 +159,57 @@ def _set_date_yesterday(driver, target_date: str):
     except Exception:
         pass
 
-    # 날짜 범위 버튼 중 "어제" 버튼 시도 — JS로 태그 우선순위 탐색
-    # innerText는 headless Chrome에서 빈 문자열 반환 → textContent 사용
+    # 날짜 범위 버튼 중 "어제" 버튼 시도
+    # - 직접 텍스트 노드(text node)만 추출: <span class="blind">기간: </span>어제 구조 대응
+    # - fallback: textContent 전체에서 '어제' 포함 + 짧은 텍스트 매칭
     clicked = driver.execute_script("""
+        function directText(el) {
+            var t = '';
+            for (var i = 0; i < el.childNodes.length; i++) {
+                if (el.childNodes[i].nodeType === 3) t += el.childNodes[i].nodeValue;
+            }
+            return t.trim();
+        }
         var tags = ['button', 'a', 'span', 'li', 'div'];
         for (var ti = 0; ti < tags.length; ti++) {
             var els = document.querySelectorAll(tags[ti]);
             for (var i = 0; i < els.length; i++) {
-                var t = (els[i].textContent || '').trim();
                 var st = window.getComputedStyle(els[i]);
-                if (t === '어제' && st.display !== 'none' && st.visibility !== 'hidden') {
-                    els[i].click(); return true;
+                if (st.display === 'none' || st.visibility === 'hidden') continue;
+                var direct = directText(els[i]);
+                var full = (els[i].textContent || '').trim();
+                if (direct === '어제' || (full.indexOf('어제') >= 0 && full.length <= 15)) {
+                    els[i].click(); return '클릭:' + full.substring(0, 20);
                 }
             }
         }
         return false;
     """)
     if clicked:
-        logger.info("[NaverShopping] '어제' 버튼 클릭")
+        logger.info(f"[NaverShopping] '어제' 버튼 클릭: {clicked}")
         time.sleep(2)
     else:
         logger.warning("[NaverShopping] '어제' 버튼 없음 — 기본 날짜 유지")
 
-    # 조회 버튼 클릭 — JS로 태그 우선순위 탐색
+    # 조회 버튼 클릭 — 직접 텍스트 노드 + fallback
     clicked = driver.execute_script("""
+        function directText(el) {
+            var t = '';
+            for (var i = 0; i < el.childNodes.length; i++) {
+                if (el.childNodes[i].nodeType === 3) t += el.childNodes[i].nodeValue;
+            }
+            return t.trim();
+        }
         var tags = ['button', 'a', 'span', 'div'];
         for (var ti = 0; ti < tags.length; ti++) {
             var els = document.querySelectorAll(tags[ti]);
             for (var i = 0; i < els.length; i++) {
-                var t = (els[i].textContent || '').trim();
                 var st = window.getComputedStyle(els[i]);
-                if (t === '조회' && st.display !== 'none' && st.visibility !== 'hidden') {
-                    els[i].click(); return true;
+                if (st.display === 'none' || st.visibility === 'hidden') continue;
+                var direct = directText(els[i]);
+                var full = (els[i].textContent || '').trim();
+                if (direct === '조회' || full === '조회') {
+                    els[i].click(); return '클릭:' + full.substring(0, 20);
                 }
             }
         }
