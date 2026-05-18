@@ -189,7 +189,7 @@ def _set_date_yesterday(driver, target_date: str):
         logger.info(f"[NaverShopping] '어제' 버튼 클릭: {clicked}")
         time.sleep(2)
     else:
-        logger.warning("[NaverShopping] '어제' 버튼 없음 — 기본 날짜 유지")
+        logger.info("[NaverShopping] '어제' 단축 버튼 없음 — 일간 기본값(어제) 사용")
 
     # 조회 버튼 클릭 — 직접 텍스트 노드 + fallback
     clicked = driver.execute_script("""
@@ -248,7 +248,8 @@ def _extract_summary(driver, label: str) -> dict | None:
         var all = document.querySelectorAll('*');
         for (var i = 0; i < all.length; i++) {
             var t = (all[i].textContent || '').trim();
-            if (t === '합계' && all[i].children.length === 0) {
+            // "합계" 또는 "합계 (데이터수 : N건)" 형태 모두 매칭
+            if (t.indexOf('합계') === 0 && all[i].children.length === 0) {
                 var row = all[i].parentElement;
                 while (row && row.children.length < 4) {
                     row = row.parentElement;
