@@ -178,5 +178,12 @@ def append_daily_rows(
     start_cell = f"A{insert_start}"
     ws.update(start_cell, built_rows, value_input_option="USER_ENTERED")
 
+    # J, K열 회색 배경 적용 (수식 셀 시각적 구분)
+    end_row = insert_start + len(built_rows) - 1
+    ws.format(
+        f"J{insert_start}:K{end_row}",
+        {"backgroundColor": {"red": 0.851, "green": 0.851, "blue": 0.851}},
+    )
+
     logger.info(f"{target_date} 데이터 {len(built_rows)}행 삽입 완료 (A{insert_start}부터)")
     return built_rows
