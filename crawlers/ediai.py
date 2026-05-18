@@ -171,6 +171,10 @@ def _select_campaign(driver, campaign_keyword: str):
             for (var i = 0; i < labels.length; i++) {
                 var forId = labels[i].getAttribute('for');
                 if (forId === 'ckb_all') continue;
+                // ckb_0~99: 컬럼 필터 체크박스(날짜·노출수 등) — 건너뜀
+                // 실제 캠페인 ID는 대형 숫자 (예: ckb_7385, ckb_7386)
+                var numMatch = forId.match(/^ckb_(\d+)$/);
+                if (numMatch && parseInt(numMatch[1]) < 100) continue;
                 // getComputedStyle로 숨겨진 레이블 제외 (headless에서 안정적)
                 var st = window.getComputedStyle(labels[i]);
                 if (st.display === 'none' || st.visibility === 'hidden' || st.opacity === '0') continue;
