@@ -160,10 +160,10 @@ def _select_campaign(driver, campaign_keyword: str):
         # 드롭다운 열기
         wrap = wait.until(EC.element_to_be_clickable((By.ID, "selectBoxWrap")))
         wrap.click()
-        time.sleep(1)
+        time.sleep(1.5)
 
-        # JS: 화면에 보이는 label[for^="ckb_"]만 순회
-        # textContent로 부모 행 전체 텍스트에서 키워드 매칭 (innerText는 headless에서 불안정)
+        # JS: getComputedStyle로 가시성 확인 (headless에서 getBoundingClientRect는 0을 반환할 수 있음)
+        # 레이블 자체 textContent 먼저 확인, 없으면 부모 최대 4단계 탐색
         actions = driver.execute_script("""
             var kw = arguments[0];
             var done = [];
@@ -171,26 +171,27 @@ def _select_campaign(driver, campaign_keyword: str):
             for (var i = 0; i < labels.length; i++) {
                 var forId = labels[i].getAttribute('for');
                 if (forId === 'ckb_all') continue;
-                // 보이지 않는 라벨(다른 곳의 체크박스) 제외
-                var lr = labels[i].getBoundingClientRect();
-                if (lr.width === 0 && lr.height === 0) continue;
+                // getComputedStyle로 숨겨진 레이블 제외 (headless에서 안정적)
+                var st = window.getComputedStyle(labels[i]);
+                if (st.display === 'none' || st.visibility === 'hidden' || st.opacity === '0') continue;
                 var chk = document.getElementById(forId);
                 if (!chk) continue;
-                // 부모 행의 textContent에서 키워드 탐색 (최대 4단계)
-                var text = '';
-                var node = labels[i];
-                for (var d = 0; d < 4; d++) {
-                    node = node.parentElement;
-                    if (!node) break;
-                    var tc = (node.textContent || '').replace(/\\s+/g, ' ').trim();
-                    if (tc.length > 2 && tc.length < 300) { text = tc; }
-                    if (text.indexOf(kw) >= 0) break;
+                // 레이블 자체 텍스트 먼저, 없으면 부모 탐색
+                var text = (labels[i].textContent || '').replace(/\\s+/g, ' ').trim();
+                if (!text || text.length < 2) {
+                    var node = labels[i];
+                    for (var d = 0; d < 4; d++) {
+                        node = node.parentElement;
+                        if (!node) break;
+                        var tc = (node.textContent || '').replace(/\\s+/g, ' ').trim();
+                        if (tc.length > 1 && tc.length < 100) { text = tc; break; }
+                    }
                 }
                 var isTarget = text.indexOf(kw) >= 0;
                 // XOR: 상태 불일치할 때만 클릭
                 if (isTarget !== chk.checked) {
                     labels[i].click();
-                    done.push(forId + ':' + (isTarget ? 'on' : 'off'));
+                    done.push(forId + ':' + (isTarget ? 'on' : 'off') + ':' + text.substring(0, 15));
                 }
             }
             return done.join(',') || 'no_change';
