@@ -101,9 +101,9 @@ def _set_yesterday(driver):
         for (var ti = 0; ti < tags.length; ti++) {
             var els = document.querySelectorAll(tags[ti]);
             for (var i = 0; i < els.length; i++) {
-                var t = (els[i].innerText || '').trim();
-                var r = els[i].getBoundingClientRect();
-                if (t === '어제' && r.width > 0 && r.height > 0) {
+                var t = (els[i].textContent || '').trim();
+                var st = window.getComputedStyle(els[i]);
+                if (t === '어제' && st.display !== 'none' && st.visibility !== 'hidden') {
                     els[i].click(); return true;
                 }
             }
@@ -217,9 +217,9 @@ def _click_search(driver):
         for (var ti = 0; ti < tags.length; ti++) {
             var els = document.querySelectorAll(tags[ti]);
             for (var i = 0; i < els.length; i++) {
-                var t = (els[i].innerText || '').trim();
-                var r = els[i].getBoundingClientRect();
-                if (t === '조회' && r.width > 0 && r.height > 0) {
+                var t = (els[i].textContent || '').trim();
+                var st = window.getComputedStyle(els[i]);
+                if (t === '조회' && st.display !== 'none' && st.visibility !== 'hidden') {
                     els[i].click(); return true;
                 }
             }
