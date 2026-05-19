@@ -344,9 +344,22 @@ def _set_date_by_sendkeys(driver, date_str: str, label: str) -> bool:
         logger.warning(f"[{label}] 날짜 입력 필드를 찾을 수 없음 — 기본값 유지")
         return False
 
-    # 시작·종료 날짜 모두 설정 (2개 이상이면 첫·마지막)
-    targets = [date_inputs[0], date_inputs[-1]] if len(date_inputs) >= 2 else [date_inputs[0]]
-    logger.info(f"[{label}] 날짜 입력 필드 {len(date_inputs)}개 발견, {len(targets)}개 설정 → {date_str}")
+    # 발견된 모든 input 속성 진단 로그
+    iframe_url = driver.execute_script("return window.location.href;")
+    logger.info(f"[{label}] iframe URL: {iframe_url}")
+    for i, inp in enumerate(date_inputs):
+        try:
+            logger.info(
+                f"[{label}] input[{i}]: type={inp.get_attribute('type')!r} "
+                f"id={inp.get_attribute('id')!r} name={inp.get_attribute('name')!r} "
+                f"class={inp.get_attribute('class')!r} val={inp.get_attribute('value')!r}"
+            )
+        except Exception:
+            pass
+
+    # 모든 input에 설정 시도 (이전엔 첫·마지막만 — 실제 날짜 input 위치 확인 전까지 전체 시도)
+    targets = date_inputs
+    logger.info(f"[{label}] 날짜 입력 필드 {len(date_inputs)}개 발견, 전체 설정 → {date_str}")
 
     for inp in targets:
         try:

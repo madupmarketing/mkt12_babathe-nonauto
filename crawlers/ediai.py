@@ -170,6 +170,22 @@ def _set_date_direct(driver, target_date: str):
         return
 
     targets = [date_inputs[0], date_inputs[-1]] if len(date_inputs) >= 2 else [date_inputs[0]]
+
+    # 설정 전 스크린샷 + 입력 속성 로그
+    try:
+        driver.save_screenshot("/tmp/ediai_before_date.png")
+    except Exception:
+        pass
+    for i, inp in enumerate(targets):
+        try:
+            logger.info(
+                f"[EdiAI] input[{i}] 설정 전: id={inp.get_attribute('id')!r} "
+                f"name={inp.get_attribute('name')!r} class={inp.get_attribute('class')!r} "
+                f"val={inp.get_attribute('value')!r}"
+            )
+        except Exception:
+            pass
+
     logger.info(f"[EdiAI] 날짜 입력 필드 {len(date_inputs)}개 → {len(targets)}개 설정: {target_date}")
 
     for inp in targets:
@@ -186,6 +202,19 @@ def _set_date_direct(driver, target_date: str):
             logger.debug(f"[EdiAI] send_keys 실패: {e}")
 
     time.sleep(0.5)
+
+    # 설정 후 스크린샷 + 실제 value 확인
+    try:
+        driver.save_screenshot("/tmp/ediai_after_date.png")
+    except Exception:
+        pass
+    for i, inp in enumerate(targets):
+        try:
+            logger.info(
+                f"[EdiAI] input[{i}] 설정 후: val={inp.get_attribute('value')!r}"
+            )
+        except Exception:
+            pass
 
 
 def _set_yesterday(driver, target_date: str | None = None):
