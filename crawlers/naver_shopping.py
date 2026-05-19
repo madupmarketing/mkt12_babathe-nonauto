@@ -191,14 +191,42 @@ def _set_date_yesterday(driver, target_date: str):
     else:
         logger.info("[NaverShopping] '어제' 단축 버튼 없음 — 일간 기본값(어제) 사용")
 
-    # 조회 버튼 클릭 — 직접 텍스트 노드 + fallback
+    # 진단: 가시 버튼 텍스트 목록 로그
+    btn_debug = driver.execute_script("""
+        var result = [];
+        var els = document.querySelectorAll('button, a, input[type=button], input[type=submit]');
+        for (var i = 0; i < els.length; i++) {
+            var st = window.getComputedStyle(els[i]);
+            if (st.display === 'none' || st.visibility === 'hidden') continue;
+            var t = (els[i].textContent || els[i].value || '').replace(/\\s+/g, ' ').trim();
+            if (t.length > 0 && t.length < 30) result.push(els[i].tagName + ':' + t);
+        }
+        return result.slice(0, 20).join(' | ');
+    """)
+    logger.info(f"[NaverShopping] 가시 버튼 목록: {btn_debug}")
+
+    # 진단: 합계 포함 요소 확인
+    sum_debug = driver.execute_script("""
+        var all = document.querySelectorAll('*');
+        var hits = [];
+        for (var i = 0; i < all.length; i++) {
+            var t = (all[i].textContent || '').trim();
+            if (t.indexOf('합계') === 0 && t.length < 40) {
+                hits.push('ch' + all[i].children.length + ':' + t.substring(0, 25));
+            }
+        }
+        return hits.slice(0, 5).join(' | ');
+    """)
+    logger.info(f"[NaverShopping] 합계 후보: {sum_debug}")
+
+    # 조회 버튼 클릭 — 직접 텍스트 노드 + 유연한 매칭
     clicked = driver.execute_script("""
         function directText(el) {
             var t = '';
             for (var i = 0; i < el.childNodes.length; i++) {
                 if (el.childNodes[i].nodeType === 3) t += el.childNodes[i].nodeValue;
             }
-            return t.trim();
+            return t.replace(/\\s+/g, '').trim();
         }
         var tags = ['button', 'a', 'span', 'div'];
         for (var ti = 0; ti < tags.length; ti++) {
@@ -207,16 +235,16 @@ def _set_date_yesterday(driver, target_date: str):
                 var st = window.getComputedStyle(els[i]);
                 if (st.display === 'none' || st.visibility === 'hidden') continue;
                 var direct = directText(els[i]);
-                var full = (els[i].textContent || '').trim();
+                var full = (els[i].textContent || '').replace(/\\s+/g, '').trim();
                 if (direct === '조회' || full === '조회') {
-                    els[i].click(); return '클릭:' + full.substring(0, 20);
+                    els[i].click(); return '클릭:' + (els[i].textContent||'').trim().substring(0, 20);
                 }
             }
         }
         return false;
     """)
     if clicked:
-        logger.info("[NaverShopping] 조회 버튼 클릭")
+        logger.info(f"[NaverShopping] 조회 버튼 클릭: {clicked}")
     else:
         logger.warning("[NaverShopping] 조회 버튼 없음")
 
