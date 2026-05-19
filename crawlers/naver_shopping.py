@@ -277,13 +277,36 @@ def _set_date_range(driver, target_date: str):
 
 def _set_date_by_sendkeys(driver, date_str: str, label: str) -> bool:
     """
-    실제 키 입력(send_keys)으로 날짜 필드 설정.
-    JS setter는 React state를 못 건드리는 경우가 있어 send_keys 사용.
+    날짜 필드 설정.
+    1) Flatpickr API (_flatpickr.setDate) 우선 — read-only input에 유일하게 동작
+    2) fallback: send_keys (일반 텍스트 input용)
+    date_str: YYYY.MM.DD 형식 (Naver 파트너센터)
     """
-    from selenium.webdriver.common.by import By
     from selenium.webdriver.common.keys import Keys
 
-    # 1단계: value가 날짜 형식인 input 탐색 (YYYY.MM.DD 또는 YYYY-MM-DD)
+    # ISO 형식 (Flatpickr setDate는 ISO 선호)
+    date_iso = date_str.replace(".", "-")  # YYYY-MM-DD
+
+    # ── 1단계: Flatpickr API 시도 ─────────────────────────────
+    fp_result = driver.execute_script("""
+        var dateIso = arguments[0];
+        var inputs = document.querySelectorAll('input');
+        var set = [];
+        for (var i = 0; i < inputs.length; i++) {
+            var fp = inputs[i]._flatpickr;
+            if (fp) {
+                fp.setDate(dateIso, true);
+                set.push('fp:' + (inputs[i].id || i) + '=' + inputs[i].value);
+            }
+        }
+        return set.length > 0 ? set.join(' | ') : 'no_fp';
+    """, date_iso)
+    logger.info(f"[{label}] Flatpickr 시도: {fp_result}")
+    if fp_result != "no_fp":
+        time.sleep(0.5)
+        return True
+
+    # ── 2단계: value가 날짜 형식인 input 탐색 (YYYY.MM.DD 또는 YYYY-MM-DD) ──
     date_inputs = driver.execute_script("""
         var els = document.querySelectorAll('input[type="text"], input:not([type])');
         var result = [];
@@ -295,7 +318,7 @@ def _set_date_by_sendkeys(driver, date_str: str, label: str) -> bool:
     """)
 
     if not date_inputs:
-        # 2단계: placeholder / class / id에 date 관련 키워드 포함 input
+        # 3단계: placeholder / class / id에 date 관련 키워드 포함 input
         date_inputs = driver.execute_script("""
             var els = document.querySelectorAll('input');
             var result = [];
@@ -306,6 +329,7 @@ def _set_date_by_sendkeys(driver, date_str: str, label: str) -> bool:
                 var nm = (els[i].name       || '').toLowerCase();
                 if (ph.indexOf('yyyy') >= 0 || ph.indexOf('날짜') >= 0 ||
                     cl.indexOf('date')  >= 0 || cl.indexOf('calendar') >= 0 ||
+                    cl.indexOf('flatpickr') >= 0 ||
                     id.indexOf('date')  >= 0 || nm.indexOf('date')     >= 0) {
                     result.push(els[i]);
                 }
@@ -314,7 +338,7 @@ def _set_date_by_sendkeys(driver, date_str: str, label: str) -> bool:
         """)
 
     if not date_inputs:
-        # 3단계: 진단 — iframe 내 모든 input 속성 로그
+        # 4단계: 진단 — iframe 내 모든 input 속성 로그
         all_inputs_info = driver.execute_script("""
             var els = document.querySelectorAll('input');
             var result = [];
@@ -344,7 +368,7 @@ def _set_date_by_sendkeys(driver, date_str: str, label: str) -> bool:
         logger.warning(f"[{label}] 날짜 입력 필드를 찾을 수 없음 — 기본값 유지")
         return False
 
-    # 발견된 모든 input 속성 진단 로그
+    # 발견된 input 속성 진단 로그
     iframe_url = driver.execute_script("return window.location.href;")
     logger.info(f"[{label}] iframe URL: {iframe_url}")
     for i, inp in enumerate(date_inputs):
@@ -357,11 +381,8 @@ def _set_date_by_sendkeys(driver, date_str: str, label: str) -> bool:
         except Exception:
             pass
 
-    # 모든 input에 설정 시도 (이전엔 첫·마지막만 — 실제 날짜 input 위치 확인 전까지 전체 시도)
-    targets = date_inputs
-    logger.info(f"[{label}] 날짜 입력 필드 {len(date_inputs)}개 발견, 전체 설정 → {date_str}")
-
-    for inp in targets:
+    logger.info(f"[{label}] send_keys fallback — {len(date_inputs)}개 필드 → {date_str}")
+    for inp in date_inputs:
         try:
             inp.click()
             time.sleep(0.2)

@@ -133,88 +133,24 @@ def _set_date_range(driver, target_date: str):
 
 def _set_date_direct(driver, target_date: str):
     """
-    날짜 입력 필드에 target_date를 send_keys로 설정 (YYYY-MM-DD 형식).
-    JS setter 방식은 React state를 못 건드려 실제 키 입력으로 대체.
+    Flatpickr 라이브러리 API로 날짜 직접 설정.
+    - EdiAI는 flatpickr-input 사용 → DOM 조작 불가, _flatpickr.setDate() 필요
+    - id: default_start_picker / default_end_picker (진단 로그에서 확인)
     """
-    from selenium.webdriver.common.keys import Keys
-
-    # value가 날짜 형식인 input 탐색
-    date_inputs = driver.execute_script("""
-        var els = document.querySelectorAll('input[type="text"], input[type="date"], input:not([type])');
-        var result = [];
-        for (var i = 0; i < els.length; i++) {
-            var v = (els[i].value || '').trim();
-            if (/^\\d{4}[.\\-]\\d{2}[.\\-]\\d{2}$/.test(v)) result.push(els[i]);
-        }
-        return result;
-    """)
-
-    if not date_inputs:
-        # placeholder/class 기반 fallback
-        date_inputs = driver.execute_script("""
-            var els = document.querySelectorAll('input');
-            var result = [];
-            for (var i = 0; i < els.length; i++) {
-                var ph = (els[i].placeholder || '').toLowerCase();
-                var cl = (els[i].className  || '').toLowerCase();
-                if (ph.indexOf('yyyy') >= 0 || ph.indexOf('날짜') >= 0 ||
-                    cl.indexOf('date')  >= 0 || cl.indexOf('calendar') >= 0) {
-                    result.push(els[i]);
-                }
-            }
-            return result;
-        """)
-
-    if not date_inputs:
-        logger.warning(f"[EdiAI] 날짜 입력 필드 없음 — 기본값 유지")
-        return
-
-    targets = [date_inputs[0], date_inputs[-1]] if len(date_inputs) >= 2 else [date_inputs[0]]
-
-    # 설정 전 스크린샷 + 입력 속성 로그
-    try:
-        driver.save_screenshot("/tmp/ediai_before_date.png")
-    except Exception:
-        pass
-    for i, inp in enumerate(targets):
-        try:
-            logger.info(
-                f"[EdiAI] input[{i}] 설정 전: id={inp.get_attribute('id')!r} "
-                f"name={inp.get_attribute('name')!r} class={inp.get_attribute('class')!r} "
-                f"val={inp.get_attribute('value')!r}"
-            )
-        except Exception:
-            pass
-
-    logger.info(f"[EdiAI] 날짜 입력 필드 {len(date_inputs)}개 → {len(targets)}개 설정: {target_date}")
-
-    for inp in targets:
-        try:
-            inp.click()
-            time.sleep(0.2)
-            inp.send_keys(Keys.CONTROL + "a")
-            time.sleep(0.1)
-            inp.send_keys(target_date)
-            time.sleep(0.2)
-            inp.send_keys(Keys.TAB)
-            time.sleep(0.3)
-        except Exception as e:
-            logger.debug(f"[EdiAI] send_keys 실패: {e}")
-
-    time.sleep(0.5)
-
-    # 설정 후 스크린샷 + 실제 value 확인
-    try:
-        driver.save_screenshot("/tmp/ediai_after_date.png")
-    except Exception:
-        pass
-    for i, inp in enumerate(targets):
-        try:
-            logger.info(
-                f"[EdiAI] input[{i}] 설정 후: val={inp.get_attribute('value')!r}"
-            )
-        except Exception:
-            pass
+    result = driver.execute_script("""
+        var d = arguments[0];
+        var startEl = document.getElementById('default_start_picker');
+        var endEl   = document.getElementById('default_end_picker');
+        if (!startEl || !endEl) return 'no_elements';
+        var fp0 = startEl._flatpickr;
+        var fp1 = endEl._flatpickr;
+        if (!fp0 || !fp1) return 'no_flatpickr_instance';
+        fp0.setDate(d, true);
+        fp1.setDate(d, true);
+        return 'fp_set | start=' + startEl.value + ' end=' + endEl.value;
+    """, target_date)
+    logger.info(f"[EdiAI] Flatpickr 날짜 설정: {result}")
+    time.sleep(1)
 
 
 def _set_yesterday(driver, target_date: str | None = None):
