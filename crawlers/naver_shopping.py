@@ -145,6 +145,47 @@ def login(driver):
     logger.info("[NaverShopping] 로그인 성공")
 
 
+def _switch_to_report_frame(driver) -> bool:
+    """
+    리포트 콘텐츠가 담긴 iframe으로 전환.
+    Naver 쇼핑파트너센터는 메인 document에 nav만 있고,
+    리포트 테이블/버튼은 iframe 안에 있음.
+    """
+    from selenium.webdriver.common.by import By
+
+    driver.switch_to.default_content()
+    frames = driver.find_elements(By.TAG_NAME, "iframe")
+    logger.info(f"[NaverShopping] iframe 수: {len(frames)}")
+
+    for idx, frame in enumerate(frames):
+        try:
+            src = frame.get_attribute("src") or ""
+            name = frame.get_attribute("name") or ""
+            fid  = frame.get_attribute("id")   or ""
+            logger.debug(f"[NaverShopping] iframe[{idx}] src={src[:80]} name={name} id={fid}")
+            driver.switch_to.frame(frame)
+            # 조회 버튼 또는 합계 텍스트가 있는 프레임인지 확인
+            hit = driver.execute_script("""
+                var els = document.querySelectorAll('*');
+                for (var i = 0; i < els.length; i++) {
+                    var t = (els[i].textContent || '').trim();
+                    if ((t === '조회' || t.indexOf('합계') === 0) && els[i].children.length === 0)
+                        return true;
+                }
+                return false;
+            """)
+            if hit:
+                logger.info(f"[NaverShopping] 리포트 iframe 발견: idx={idx} src={src[:60]}")
+                return True
+            driver.switch_to.default_content()
+        except Exception as e:
+            logger.debug(f"[NaverShopping] iframe[{idx}] 전환 실패: {e}")
+            driver.switch_to.default_content()
+
+    logger.warning("[NaverShopping] 리포트 iframe을 찾지 못함 — 기본 document 유지")
+    return False
+
+
 def _set_date_yesterday(driver, target_date: str):
     """날짜 필터를 전일자로 설정 후 조회."""
     from selenium.webdriver.common.by import By
@@ -339,8 +380,11 @@ def scrape(target_date: str | None = None) -> dict:
                 logger.error(f"[NaverShopping/{label}] 세션 만료 — 로그인 페이지로 리다이렉트됨")
                 results[label.lower()] = None
                 continue
+            # 리포트 콘텐츠 iframe으로 전환
+            _switch_to_report_frame(driver)
             _set_date_yesterday(driver, target_date)
             data = _extract_summary(driver, label)
+            driver.switch_to.default_content()
             results[label.lower()] = data
             if data:
                 logger.info(f"[NaverShopping/{label}] 완료: {data}")
