@@ -1,5 +1,9 @@
 {
   "spreadsheet_id": "1ks8wr3Rh8HeJG5bIwfAUlZ1PLsUB_aeDp3GBzmCckY4",
   "data_sheet_name": "버티컬_raw",
-  "config_sheet_name": "설정"
+  "config_sheet_name": "설정",
+  "naver_shopping_static": {
+    "pc": {"imps": 3000, "clicks": 160, "cost": 5000},
+    "mo": {"imps": 12000, "clicks": 900, "cost": 45000}
+  }
 }

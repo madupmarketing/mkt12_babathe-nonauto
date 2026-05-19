@@ -100,35 +100,20 @@ def run(target_date: str | None = None) -> dict:
                            "imps": 0, "clicks": 0, "cost": 0})
 
     # ── 네이버쇼핑 PC / MO ───────────────────────────────────
-    if "naver_shopping" in skip:
-        logger.info("--- 네이버쇼핑 건너뜀 (SKIP_CRAWLERS) ---")
-        rows_data.append({"media": "네이버쇼핑", "campaign": "네이버쇼핑_PC", "device": "PC",
-                           "imps": 0, "clicks": 0, "cost": 0})
-        rows_data.append({"media": "네이버쇼핑", "campaign": "네이버쇼핑_M", "device": "M",
-                           "imps": 0, "clicks": 0, "cost": 0})
-    else:
-        logger.info("--- 네이버쇼핑 크롤링 시작 ---")
-        try:
-            nv_data = naver_shopping.scrape(target_date=target_date)
-            for label, campaign, device in [("pc", "네이버쇼핑_PC", "PC"), ("mo", "네이버쇼핑_M", "M")]:
-                d = nv_data.get(label)
-                if d:
-                    rows_data.append({
-                        "media": "네이버쇼핑", "campaign": campaign, "device": device,
-                        "imps": d["imps"], "clicks": d["clicks"], "cost": d["cost"],
-                    })
-                    logger.info(f"[네이버쇼핑/{label.upper()}] 완료: {d}")
-                else:
-                    errors.append(f"네이버쇼핑_{label.upper()} 데이터 없음")
-                    rows_data.append({"media": "네이버쇼핑", "campaign": campaign, "device": device,
-                                       "imps": 0, "clicks": 0, "cost": 0})
-        except Exception as e:
-            logger.error(f"네이버쇼핑 크롤링 실패: {e}")
-            errors.append(f"네이버쇼핑 오류: {e}")
-            rows_data.append({"media": "네이버쇼핑", "campaign": "네이버쇼핑_PC", "device": "PC",
-                               "imps": 0, "clicks": 0, "cost": 0})
-            rows_data.append({"media": "네이버쇼핑", "campaign": "네이버쇼핑_M", "device": "M",
-                               "imps": 0, "clicks": 0, "cost": 0})
+    # config.json의 naver_shopping_static 값을 고정값으로 사용.
+    # 크롤러가 안정화되면 아래 블록을 크롤링 방식으로 교체할 것.
+    nv_static = static_cfg.get("naver_shopping_static", {})
+    pc_s = nv_static.get("pc", {})
+    mo_s = nv_static.get("mo", {})
+    logger.info(f"--- 네이버쇼핑 고정값 사용: PC={pc_s}, MO={mo_s} ---")
+    rows_data.append({
+        "media": "네이버쇼핑", "campaign": "네이버쇼핑_PC", "device": "PC",
+        "imps": pc_s.get("imps", 0), "clicks": pc_s.get("clicks", 0), "cost": pc_s.get("cost", 0),
+    })
+    rows_data.append({
+        "media": "네이버쇼핑", "campaign": "네이버쇼핑_M", "device": "M",
+        "imps": mo_s.get("imps", 0), "clicks": mo_s.get("clicks", 0), "cost": mo_s.get("cost", 0),
+    })
 
     # ── 에디AI ───────────────────────────────────────────────
     if "ediai" in skip:
