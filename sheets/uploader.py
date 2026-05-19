@@ -185,5 +185,26 @@ def append_daily_rows(
         {"backgroundColor": {"red": 0.851, "green": 0.851, "blue": 0.851}},
     )
 
+    # 날짜(A열) 기준 오름차순 정렬 — 헤더(1행) 제외
+    try:
+        spreadsheet.batch_update({
+            "requests": [{
+                "sortRange": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "startRowIndex": 1,       # 0-indexed → 2행부터 (1행=헤더 제외)
+                        "startColumnIndex": 0,
+                    },
+                    "sortSpecs": [{
+                        "dimensionIndex": 0,      # A열 (0-indexed)
+                        "sortOrder": "ASCENDING"
+                    }]
+                }
+            }]
+        })
+        logger.info(f"날짜 기준 오름차순 정렬 완료")
+    except Exception as e:
+        logger.warning(f"정렬 실패 (업로드는 정상): {e}")
+
     logger.info(f"{target_date} 데이터 {len(built_rows)}행 삽입 완료 (A{insert_start}부터)")
     return built_rows

@@ -94,27 +94,76 @@ def login(driver):
     logger.info("[EdiAI] 로그인 성공")
 
 
-def _set_yesterday(driver):
-    """상단 '어제' 버튼 클릭 — 가시성 확인 후 클릭."""
-    clicked = driver.execute_script("""
-        var tags = ['button', 'a', 'span', 'li', 'div'];
-        for (var ti = 0; ti < tags.length; ti++) {
-            var els = document.querySelectorAll(tags[ti]);
-            for (var i = 0; i < els.length; i++) {
-                var t = (els[i].textContent || '').trim();
-                var st = window.getComputedStyle(els[i]);
-                if (t === '어제' && st.display !== 'none' && st.visibility !== 'hidden') {
-                    els[i].click(); return true;
+def _set_date_range(driver, target_date: str):
+    """
+    날짜 필터를 target_date로 설정.
+    - target_date == KST 전일자: '어제' 단축 버튼 사용
+    - 그 외: 날짜 텍스트 입력 필드 직접 설정 (YYYY-MM-DD 형식)
+    """
+    from datetime import datetime, timezone, timedelta as _td
+
+    kst = timezone(_td(hours=9))
+    yesterday = (datetime.now(kst) - _td(days=1)).strftime("%Y-%m-%d")
+
+    if target_date == yesterday:
+        clicked = driver.execute_script("""
+            var tags = ['button', 'a', 'span', 'li', 'div'];
+            for (var ti = 0; ti < tags.length; ti++) {
+                var els = document.querySelectorAll(tags[ti]);
+                for (var i = 0; i < els.length; i++) {
+                    var t = (els[i].textContent || '').trim();
+                    var st = window.getComputedStyle(els[i]);
+                    if (t === '어제' && st.display !== 'none' && st.visibility !== 'hidden') {
+                        els[i].click(); return true;
+                    }
                 }
             }
-        }
-        return false;
-    """)
-    if clicked:
-        logger.info("[EdiAI] '어제' 버튼 클릭")
-        time.sleep(1)
+            return false;
+        """)
+        if clicked:
+            logger.info("[EdiAI] '어제' 버튼 클릭")
+            time.sleep(1)
+        else:
+            logger.warning("[EdiAI] '어제' 버튼 없음 — 날짜 직접 입력 시도")
+            _set_date_direct(driver, target_date)
     else:
-        logger.warning("[EdiAI] '어제' 버튼 없음 — 기본 날짜 유지")
+        logger.info(f"[EdiAI] target_date({target_date}) ≠ yesterday({yesterday}) — 날짜 직접 입력")
+        _set_date_direct(driver, target_date)
+
+
+def _set_date_direct(driver, target_date: str):
+    """날짜 입력 필드에 target_date를 직접 설정 (YYYY-MM-DD 형식)."""
+    result = driver.execute_script("""
+        var dateStr = arguments[0];
+        // YYYY-MM-DD 또는 YYYY.MM.DD 패턴 값을 가진 input 탐색
+        var inputs = document.querySelectorAll('input[type="text"], input[type="date"], input:not([type])');
+        var dateInputs = [];
+        for (var i = 0; i < inputs.length; i++) {
+            var v = (inputs[i].value || '').trim();
+            if (/^\\d{4}[\\-.]\d{2}[\\-.]\d{2}$/.test(v)) dateInputs.push(inputs[i]);
+        }
+        if (dateInputs.length === 0) return 'no_inputs';
+        var targets = dateInputs.length >= 2
+            ? [dateInputs[0], dateInputs[dateInputs.length - 1]]
+            : [dateInputs[0]];
+        var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        for (var j = 0; j < targets.length; j++) {
+            setter.call(targets[j], dateStr);
+            targets[j].dispatchEvent(new Event('input',  {bubbles: true}));
+            targets[j].dispatchEvent(new Event('change', {bubbles: true}));
+        }
+        return 'set:' + targets.length + ':' + dateStr;
+    """, target_date)
+    logger.info(f"[EdiAI] 날짜 직접 입력: {result}")
+    time.sleep(1)
+
+
+def _set_yesterday(driver, target_date: str | None = None):
+    """하위호환 — target_date 미전달 시 어제 버튼만 시도."""
+    if target_date is None:
+        from utils.dates import get_target_date
+        target_date = get_target_date()
+    _set_date_range(driver, target_date)
 
 
 def _select_advertiser(driver):
@@ -333,8 +382,8 @@ def scrape(target_date: str | None = None) -> dict:
         driver.get(REPORT_URL)
         time.sleep(4)
 
-        # 날짜 = 어제, 광고주 = 바바더닷컴 (페이지 로드 시 이미 설정돼 있을 수 있음)
-        _set_yesterday(driver)
+        # 날짜 = target_date, 광고주 = 바바더닷컴
+        _set_yesterday(driver, target_date)
         _select_advertiser(driver)
 
         results = {}

@@ -186,81 +186,8 @@ def _switch_to_report_frame(driver) -> bool:
     return False
 
 
-def _set_date_yesterday(driver, target_date: str):
-    """날짜 필터를 전일자로 설정 후 조회."""
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.support import expected_conditions as EC
-    from selenium.webdriver.support.ui import WebDriverWait
-
-    wait = WebDriverWait(driver, 20)
-    time.sleep(3)
-
-    try:
-        driver.save_screenshot("/tmp/naver_before_date.png")
-    except Exception:
-        pass
-
-    # 날짜 범위 버튼 중 "어제" 버튼 시도
-    # - 직접 텍스트 노드(text node)만 추출: <span class="blind">기간: </span>어제 구조 대응
-    # - fallback: textContent 전체에서 '어제' 포함 + 짧은 텍스트 매칭
-    clicked = driver.execute_script("""
-        function directText(el) {
-            var t = '';
-            for (var i = 0; i < el.childNodes.length; i++) {
-                if (el.childNodes[i].nodeType === 3) t += el.childNodes[i].nodeValue;
-            }
-            return t.trim();
-        }
-        var tags = ['button', 'a', 'span', 'li', 'div'];
-        for (var ti = 0; ti < tags.length; ti++) {
-            var els = document.querySelectorAll(tags[ti]);
-            for (var i = 0; i < els.length; i++) {
-                var st = window.getComputedStyle(els[i]);
-                if (st.display === 'none' || st.visibility === 'hidden') continue;
-                var direct = directText(els[i]);
-                var full = (els[i].textContent || '').trim();
-                if (direct === '어제' || (full.indexOf('어제') >= 0 && full.length <= 15)) {
-                    els[i].click(); return '클릭:' + full.substring(0, 20);
-                }
-            }
-        }
-        return false;
-    """)
-    if clicked:
-        logger.info(f"[NaverShopping] '어제' 버튼 클릭: {clicked}")
-        time.sleep(2)
-    else:
-        logger.info("[NaverShopping] '어제' 단축 버튼 없음 — 일간 기본값(어제) 사용")
-
-    # 진단: 가시 버튼 텍스트 목록 로그
-    btn_debug = driver.execute_script("""
-        var result = [];
-        var els = document.querySelectorAll('button, a, input[type=button], input[type=submit]');
-        for (var i = 0; i < els.length; i++) {
-            var st = window.getComputedStyle(els[i]);
-            if (st.display === 'none' || st.visibility === 'hidden') continue;
-            var t = (els[i].textContent || els[i].value || '').replace(/\\s+/g, ' ').trim();
-            if (t.length > 0 && t.length < 30) result.push(els[i].tagName + ':' + t);
-        }
-        return result.slice(0, 20).join(' | ');
-    """)
-    logger.info(f"[NaverShopping] 가시 버튼 목록: {btn_debug}")
-
-    # 진단: 합계 포함 요소 확인
-    sum_debug = driver.execute_script("""
-        var all = document.querySelectorAll('*');
-        var hits = [];
-        for (var i = 0; i < all.length; i++) {
-            var t = (all[i].textContent || '').trim();
-            if (t.indexOf('합계') === 0 && t.length < 40) {
-                hits.push('ch' + all[i].children.length + ':' + t.substring(0, 25));
-            }
-        }
-        return hits.slice(0, 5).join(' | ');
-    """)
-    logger.info(f"[NaverShopping] 합계 후보: {sum_debug}")
-
-    # 조회 버튼 클릭 — 직접 텍스트 노드 + 유연한 매칭
+def _click_search_btn(driver):
+    """'조회' 버튼 클릭 — 직접 텍스트 노드 + 유연한 매칭."""
     clicked = driver.execute_script("""
         function directText(el) {
             var t = '';
@@ -288,8 +215,91 @@ def _set_date_yesterday(driver, target_date: str):
         logger.info(f"[NaverShopping] 조회 버튼 클릭: {clicked}")
     else:
         logger.warning("[NaverShopping] 조회 버튼 없음")
-
     time.sleep(4)
+
+
+def _set_date_range(driver, target_date: str):
+    """
+    날짜 필터를 target_date로 설정 후 조회.
+    - target_date == KST 전일자: '어제' 단축 버튼 사용
+    - 그 외: 날짜 텍스트 입력 필드 직접 설정 (YYYY.MM.DD 형식)
+    """
+    from datetime import datetime, timezone, timedelta as _td
+
+    kst = timezone(_td(hours=9))
+    yesterday = (datetime.now(kst) - _td(days=1)).strftime("%Y-%m-%d")
+
+    time.sleep(3)
+
+    try:
+        driver.save_screenshot("/tmp/naver_before_date.png")
+    except Exception:
+        pass
+
+    if target_date == yesterday:
+        # 어제 단축 버튼 클릭
+        clicked = driver.execute_script("""
+            function directText(el) {
+                var t = '';
+                for (var i = 0; i < el.childNodes.length; i++) {
+                    if (el.childNodes[i].nodeType === 3) t += el.childNodes[i].nodeValue;
+                }
+                return t.trim();
+            }
+            var tags = ['button', 'a', 'span', 'li', 'div'];
+            for (var ti = 0; ti < tags.length; ti++) {
+                var els = document.querySelectorAll(tags[ti]);
+                for (var i = 0; i < els.length; i++) {
+                    var st = window.getComputedStyle(els[i]);
+                    if (st.display === 'none' || st.visibility === 'hidden') continue;
+                    var direct = directText(els[i]);
+                    var full = (els[i].textContent || '').trim();
+                    if (direct === '어제' || (full.indexOf('어제') >= 0 && full.length <= 15)) {
+                        els[i].click(); return '클릭:' + full.substring(0, 20);
+                    }
+                }
+            }
+            return false;
+        """)
+        if clicked:
+            logger.info(f"[NaverShopping] '어제' 버튼 클릭: {clicked}")
+            time.sleep(2)
+        else:
+            logger.info("[NaverShopping] '어제' 단축 버튼 없음 — 기본값 사용")
+    else:
+        # 날짜 직접 입력 (Naver: YYYY.MM.DD 형식)
+        date_naver = target_date.replace("-", ".")
+        result = driver.execute_script("""
+            var dateStr = arguments[0];
+            // YYYY.MM.DD 패턴 값을 가진 text input 탐색
+            var inputs = document.querySelectorAll('input[type="text"], input:not([type])');
+            var dateInputs = [];
+            for (var i = 0; i < inputs.length; i++) {
+                var v = (inputs[i].value || '').trim();
+                if (/^\\d{4}\\.\\d{2}\\.\\d{2}$/.test(v)) dateInputs.push(inputs[i]);
+            }
+            if (dateInputs.length === 0) return 'no_inputs';
+            // 시작·종료 날짜 모두 target_date로 설정
+            var targets = dateInputs.length >= 2
+                ? [dateInputs[0], dateInputs[dateInputs.length - 1]]
+                : [dateInputs[0]];
+            var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            for (var j = 0; j < targets.length; j++) {
+                setter.call(targets[j], dateStr);
+                targets[j].dispatchEvent(new Event('input',  {bubbles: true}));
+                targets[j].dispatchEvent(new Event('change', {bubbles: true}));
+            }
+            return 'set:' + targets.length + ':' + dateStr;
+        """, date_naver)
+        logger.info(f"[NaverShopping] 날짜 직접 입력: {result} | target={target_date}")
+        time.sleep(1)
+
+    _click_search_btn(driver)
+
+
+# 하위호환 alias
+def _set_date_yesterday(driver, target_date: str):
+    _set_date_range(driver, target_date)
 
 
 def _find_col_idx(headers: list[str], keywords: list[str]) -> int | None:
@@ -320,8 +330,15 @@ def _extract_summary(driver, label: str) -> dict | None:
             // "합계" 또는 "합계 (데이터수 : N건)" 형태 모두 매칭
             if (t.indexOf('합계') === 0 && all[i].children.length === 0) {
                 var row = all[i].parentElement;
-                while (row && row.children.length < 4) {
+                // 최소 7개 셀(합계|노출|클릭|클릭률|구매건수|구매금액|적용수수료)이 있는 행까지 올라감
+                while (row && row.children.length < 7) {
                     row = row.parentElement;
+                }
+                // 7개 미만이면 4개 이상인 행으로 fallback
+                if (!row) {
+                    var row2 = all[i].parentElement;
+                    while (row2 && row2.children.length < 4) row2 = row2.parentElement;
+                    row = row2;
                 }
                 if (!row) return null;
                 var result = [];
@@ -338,12 +355,26 @@ def _extract_summary(driver, label: str) -> dict | None:
         logger.error(f"[NaverShopping/{label}] 합계 행을 찾을 수 없음")
         return None
 
-    logger.info(f"[NaverShopping/{label}] 합계 행 셀 수: {len(cells)}")
+    logger.info(f"[NaverShopping/{label}] 합계 행 전체: {cells}")
 
-    # 구조: [합계텍스트, 노출수, 클릭수, 클릭율, 적용수수료, ...]
+    # 상품클릭리포트 컬럼 구조:
+    # [합계텍스트, 노출수, 클릭수, 클릭률, 구매건수, 구매금액, 적용수수료]
+    # → imps=1, clicks=2, cost=6
     imps   = _clean_number(cells[1]) if len(cells) > 1 else 0
     clicks = _clean_number(cells[2]) if len(cells) > 2 else 0
-    cost   = _clean_number(cells[4]) if len(cells) > 4 else 0
+
+    # 적용수수료: cells[6] (7컬럼 구조) 또는 '적용수수료' 키워드로 동적 탐색
+    cost = 0
+    if len(cells) > 6:
+        cost = _clean_number(cells[6])
+    elif len(cells) > 4:
+        # fallback: 마지막 숫자 셀 (컬럼이 적을 때)
+        for ci in range(len(cells) - 1, 2, -1):
+            v = _clean_number(cells[ci])
+            if v > 0:
+                cost = v
+                logger.info(f"[NaverShopping/{label}] cost fallback idx={ci}: {v}")
+                break
 
     logger.info(f"[NaverShopping/{label}] imps={imps}, clicks={clicks}, cost={cost}")
     return {"imps": imps, "clicks": clicks, "cost": cost}
@@ -382,7 +413,7 @@ def scrape(target_date: str | None = None) -> dict:
                 continue
             # 리포트 콘텐츠 iframe으로 전환
             _switch_to_report_frame(driver)
-            _set_date_yesterday(driver, target_date)
+            _set_date_range(driver, target_date)
             data = _extract_summary(driver, label)
             driver.switch_to.default_content()
             results[label.lower()] = data
