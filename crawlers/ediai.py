@@ -132,30 +132,60 @@ def _set_date_range(driver, target_date: str):
 
 
 def _set_date_direct(driver, target_date: str):
-    """날짜 입력 필드에 target_date를 직접 설정 (YYYY-MM-DD 형식)."""
-    result = driver.execute_script("""
-        var dateStr = arguments[0];
-        // YYYY-MM-DD 또는 YYYY.MM.DD 패턴 값을 가진 input 탐색
-        var inputs = document.querySelectorAll('input[type="text"], input[type="date"], input:not([type])');
-        var dateInputs = [];
-        for (var i = 0; i < inputs.length; i++) {
-            var v = (inputs[i].value || '').trim();
-            if (/^\\d{4}[\\-.]\d{2}[\\-.]\d{2}$/.test(v)) dateInputs.push(inputs[i]);
+    """
+    날짜 입력 필드에 target_date를 send_keys로 설정 (YYYY-MM-DD 형식).
+    JS setter 방식은 React state를 못 건드려 실제 키 입력으로 대체.
+    """
+    from selenium.webdriver.common.keys import Keys
+
+    # value가 날짜 형식인 input 탐색
+    date_inputs = driver.execute_script("""
+        var els = document.querySelectorAll('input[type="text"], input[type="date"], input:not([type])');
+        var result = [];
+        for (var i = 0; i < els.length; i++) {
+            var v = (els[i].value || '').trim();
+            if (/^\\d{4}[.\\-]\\d{2}[.\\-]\\d{2}$/.test(v)) result.push(els[i]);
         }
-        if (dateInputs.length === 0) return 'no_inputs';
-        var targets = dateInputs.length >= 2
-            ? [dateInputs[0], dateInputs[dateInputs.length - 1]]
-            : [dateInputs[0]];
-        var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-        for (var j = 0; j < targets.length; j++) {
-            setter.call(targets[j], dateStr);
-            targets[j].dispatchEvent(new Event('input',  {bubbles: true}));
-            targets[j].dispatchEvent(new Event('change', {bubbles: true}));
-        }
-        return 'set:' + targets.length + ':' + dateStr;
-    """, target_date)
-    logger.info(f"[EdiAI] 날짜 직접 입력: {result}")
-    time.sleep(1)
+        return result;
+    """)
+
+    if not date_inputs:
+        # placeholder/class 기반 fallback
+        date_inputs = driver.execute_script("""
+            var els = document.querySelectorAll('input');
+            var result = [];
+            for (var i = 0; i < els.length; i++) {
+                var ph = (els[i].placeholder || '').toLowerCase();
+                var cl = (els[i].className  || '').toLowerCase();
+                if (ph.indexOf('yyyy') >= 0 || ph.indexOf('날짜') >= 0 ||
+                    cl.indexOf('date')  >= 0 || cl.indexOf('calendar') >= 0) {
+                    result.push(els[i]);
+                }
+            }
+            return result;
+        """)
+
+    if not date_inputs:
+        logger.warning(f"[EdiAI] 날짜 입력 필드 없음 — 기본값 유지")
+        return
+
+    targets = [date_inputs[0], date_inputs[-1]] if len(date_inputs) >= 2 else [date_inputs[0]]
+    logger.info(f"[EdiAI] 날짜 입력 필드 {len(date_inputs)}개 → {len(targets)}개 설정: {target_date}")
+
+    for inp in targets:
+        try:
+            inp.click()
+            time.sleep(0.2)
+            inp.send_keys(Keys.CONTROL + "a")
+            time.sleep(0.1)
+            inp.send_keys(target_date)
+            time.sleep(0.2)
+            inp.send_keys(Keys.TAB)
+            time.sleep(0.3)
+        except Exception as e:
+            logger.debug(f"[EdiAI] send_keys 실패: {e}")
+
+    time.sleep(0.5)
 
 
 def _set_yesterday(driver, target_date: str | None = None):
