@@ -375,11 +375,11 @@ def scrape(target_date: str | None = None) -> dict:
 
         logger.info(f"[EdiAI] 리포트 페이지 이동: {REPORT_URL}")
         driver.get(REPORT_URL)
-        time.sleep(4)
+        time.sleep(8)  # React 앱 초기 렌더링 충분히 대기
 
-        # 날짜 = target_date, 광고주 = 바바더닷컴
-        _set_yesterday(driver, target_date)
+        # 광고주 먼저 선택 → 날짜 피커가 광고주 선택 후 렌더링됨
         _select_advertiser(driver)
+        _set_yesterday(driver, target_date)
 
         results = {}
 
