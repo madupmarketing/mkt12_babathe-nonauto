@@ -86,22 +86,46 @@ jobs:
           GAS_RERUN_URL:     ${{ vars.GAS_RERUN_URL }}
           JOB_STATUS:        ${{ job.status }}
         run: |
-          if [ "$JOB_STATUS" = "success" ]; then
-            ICON=":white_check_mark:"
-            STATUS_TEXT="업로드 성공"
-          else
-            ICON=":x:"
-            STATUS_TEXT="업로드 실패"
-          fi
-          TARGET=$(TZ=Asia/Seoul date -d 'yesterday' '+%Y-%m-%d' 2>/dev/null || TZ=Asia/Seoul date -v-1d '+%Y-%m-%d')
-          RERUN_PART=""
-          if [ -n "$GAS_RERUN_URL" ]; then
-            RERUN_PART="\n<${GAS_RERUN_URL}|재실행>"
-          fi
           if [ -z "$SLACK_WEBHOOK_URL" ]; then
             echo "SLACK_WEBHOOK_URL 미설정 — 알림 건너뜀"
             exit 0
           fi
-          curl -s -X POST "$SLACK_WEBHOOK_URL" \
-            -H 'Content-Type: application/json' \
-            -d "{\"text\": \"${ICON} *[바바더닷컴 수기매체]* ${STATUS_TEXT}\n대상 날짜: \`${TARGET}\`${RERUN_PART}\"}"
+          export REPORT_DATE=$(TZ=Asia/Seoul date -d 'yesterday' '+%Y-%m-%d' 2>/dev/null || TZ=Asia/Seoul date -v-1d '+%Y-%m-%d')
+          python3 <<'PYEOF'
+          import os, json, urllib.request
+
+          status  = os.environ.get('JOB_STATUS', 'failure')
+          target  = os.environ.get('REPORT_DATE', '')
+          gas_url = os.environ.get('GAS_RERUN_URL', '')
+          wh_url  = os.environ.get('SLACK_WEBHOOK_URL', '')
+
+          icon        = ':white_check_mark:' if status == 'success' else ':x:'
+          status_text = '업로드 성공' if status == 'success' else '업로드 실패'
+
+          blocks = [{
+              'type': 'section',
+              'text': {
+                  'type': 'mrkdwn',
+                  'text': f'{icon} *[바바더닷컴 수기매체]* {status_text}\n대상 날짜: `{target}`'
+              }
+          }]
+          if gas_url:
+              blocks.append({
+                  'type': 'actions',
+                  'elements': [{
+                      'type': 'button',
+                      'text': {'type': 'plain_text', 'text': '📅 재수집하기', 'emoji': True},
+                      'url': gas_url,
+                      'style': 'primary'
+                  }]
+              })
+
+          body = json.dumps({'blocks': blocks}).encode()
+          req  = urllib.request.Request(
+              wh_url, data=body,
+              headers={'Content-Type': 'application/json'},
+              method='POST'
+          )
+          urllib.request.urlopen(req)
+          print('Slack 알림 전송 완료')
+          PYEOF
