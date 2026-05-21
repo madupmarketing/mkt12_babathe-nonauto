@@ -79,7 +79,18 @@ def login(driver):
     btn = driver.find_element(By.CSS_SELECTOR, 'button.btn_login')
     driver.execute_script("arguments[0].click();", btn)
     logger.info("[EdiAI] Login 버튼 클릭")
-    time.sleep(6)
+    time.sleep(3)
+
+    # login_bypass가 auth 토큰을 설정하고 앱 페이지로 리다이렉트될 때까지 대기
+    try:
+        WebDriverWait(driver, 20).until(
+            lambda d: "login_bypass" not in d.current_url and "login" not in d.current_url
+        )
+        logger.info(f"[EdiAI] 앱 페이지 진입 확인: {driver.current_url}")
+    except Exception:
+        logger.warning(f"[EdiAI] login_bypass 탈출 타임아웃 — 현재 URL: {driver.current_url}, 강제 진행")
+
+    time.sleep(2)
 
     try:
         driver.save_screenshot("/tmp/ediai_login.png")
@@ -162,21 +173,42 @@ def _set_yesterday(driver, target_date: str | None = None):
 
 
 def _select_advertiser(driver):
-    """광고주 드롭다운 (React-Select, .report_SelectAuid) — Selenium으로 직접 조작."""
+    """광고주 드롭다운 (React-Select) — 여러 셀렉터 fallback 적용."""
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.webdriver.support.ui import WebDriverWait
 
-    time.sleep(1)
-    wait = WebDriverWait(driver, 10)
     try:
-        # React-Select control 클릭으로 드롭다운 열기
-        control = wait.until(EC.element_to_be_clickable(
-            (By.CSS_SELECTOR, '.report_SelectAuid [class*="-control"]')
-        ))
+        driver.save_screenshot("/tmp/ediai_before_adv_select.png")
+    except Exception:
+        pass
+
+    # 광고주 드롭다운 셀렉터 후보 (우선순위 순)
+    candidates = [
+        '.report_SelectAuid [class*="-control"]',
+        '[class*="SelectAuid"] [class*="-control"]',
+        '[class*="selectAuid"] [class*="-control"]',
+        '[class*="report_Select"] [class*="-control"]',
+    ]
+
+    control = None
+    for sel in candidates:
+        try:
+            control = WebDriverWait(driver, 8).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, sel))
+            )
+            logger.info(f"[EdiAI] 광고주 드롭다운 발견 ({sel})")
+            break
+        except Exception:
+            continue
+
+    if control is None:
+        logger.warning("[EdiAI] 광고주 드롭다운을 찾지 못함 — 기본값 유지")
+        return
+
+    try:
         control.click()
-        time.sleep(1)
-        # 열린 메뉴에서 ADVERTISER_NAME 포함 옵션 클릭
+        time.sleep(1.5)
         options = driver.find_elements(By.CSS_SELECTOR, '[class*="-option"]')
         for opt in options:
             if ADVERTISER_NAME in (opt.text or ""):
@@ -373,9 +405,22 @@ def scrape(target_date: str | None = None) -> dict:
     try:
         login(driver)
 
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.support.ui import WebDriverWait
+
         logger.info(f"[EdiAI] 리포트 페이지 이동: {REPORT_URL}")
         driver.get(REPORT_URL)
-        time.sleep(8)  # React 앱 초기 렌더링 충분히 대기
+
+        # React 앱 렌더링 대기 — React-Select control이 나타날 때까지 (최대 20초)
+        try:
+            WebDriverWait(driver, 20).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, '[class*="-control"]'))
+            )
+            logger.info("[EdiAI] 리포트 페이지 렌더링 확인")
+        except Exception:
+            logger.warning("[EdiAI] 렌더링 대기 타임아웃 — 강제 진행")
+            time.sleep(5)
 
         # 광고주 먼저 선택 → 날짜 피커가 광고주 선택 후 렌더링됨
         _select_advertiser(driver)
