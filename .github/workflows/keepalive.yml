@@ -1,0 +1,31 @@
+name: Keepalive (예약 자동정지 방지)
+
+# [목적]
+# GitHub은 레포에 60일간 커밋 활동이 없으면 예약(schedule) 워크플로우를 자동 정지시킵니다.
+# 담당자 부재로 커밋이 끊기면 daily_crawl 예약도 언젠가 꺼집니다.
+# 이 워크플로우가 주기적으로 아주 작은 커밋을 남겨 레포를 "활성" 상태로 유지 → 예약이 꺼지지 않게 합니다.
+# (12일마다 실행 → 60일 한도 훨씬 이전에 매번 갱신 → 스스로도 유지됨)
+
+on:
+  schedule:
+    - cron: "30 0 */12 * *"   # 매월 1·13·25일 KST 09:30 (12일 간격, 60일 한도 대비 여유)
+  workflow_dispatch:            # 필요 시 수동 실행
+
+permissions:
+  contents: write               # git push 위해 필요
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 체크아웃
+        uses: actions/checkout@v4
+
+      - name: keepalive 커밋 남기기
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .keepalive
+          git add .keepalive
+          git commit -m "chore: keepalive (예약 유지)" || { echo "변경 없음 — 스킵"; exit 0; }
+          git push
