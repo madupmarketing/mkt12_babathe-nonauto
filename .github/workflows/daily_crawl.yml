@@ -1,9 +1,11 @@
 name: Daily Media Crawl (바바더닷컴)
 
 on:
-  # 매일 오전 8시 KST (= 23:00 UTC 전날)
+  # 매일 KST 07:40 (= 22:40 UTC 전날)
+  # 이전: "0 23 * * *" (KST 08:00, 정각) → 전 세계 크론이 정각에 몰려 지연·누락 발생
+  # 변경: 분(minute)을 정각에서 비켜 비혼잡 시간대로 이동해 예약 지연 확률을 낮춤
   schedule:
-    - cron: "0 23 * * *"
+    - cron: "40 22 * * *"
   # 수동 실행 및 날짜 지정 재실행
   workflow_dispatch:
     inputs:
@@ -52,22 +54,16 @@ jobs:
           DATE_FROM:              ${{ github.event.inputs.date_from }}
           DATE_TO:                ${{ github.event.inputs.date_to }}
           ALLOW_PARTIAL_UPLOAD:   "1"
-          # 전체 크롤러 활성화
           SKIP_CRAWLERS:          ""
-          # 버즈빌
           BUZZVIL_EMAIL:          ${{ secrets.BUZZVIL_EMAIL }}
           BUZZVIL_PASSWORD:       ${{ secrets.BUZZVIL_PASSWORD }}
-          # 아이스크린(ive)
           ISCREEN_ID:             ${{ secrets.ISCREEN_ID }}
           ISCREEN_PW:             ${{ secrets.ISCREEN_PW }}
-          # 네이버쇼핑
           NAVER_ID:               ${{ secrets.NAVER_ID }}
           NAVER_PW:               ${{ secrets.NAVER_PW }}
           NAVER_COOKIE:           ${{ secrets.NAVER_COOKIE }}
-          # 에디AI
           EDIAI_ID:               ${{ secrets.EDIAI_ID }}
           EDIAI_PW:               ${{ secrets.EDIAI_PW }}
-          # Google Sheets 서비스 계정
           GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
         run: python main.py
 
